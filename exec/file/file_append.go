@@ -20,13 +20,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/chaosblade-io/chaosblade-exec-os/exec"
-	"github.com/chaosblade-io/chaosblade-spec-go/log"
 	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chaosblade-io/chaosblade-exec-os/exec"
+	"github.com/chaosblade-io/chaosblade-spec-go/log"
 
 	"github.com/chaosblade-io/chaosblade-exec-os/exec/category"
 	"github.com/chaosblade-io/chaosblade-spec-go/spec"
@@ -71,7 +72,7 @@ func NewFileAppendActionSpec() spec.ExpActionCommandSpec {
 					Desc:     "cgroup root path, default value /sys/fs/cgroup",
 					NoArgs:   false,
 					Required: false,
-					Default: "/sys/fs/cgroup",
+					Default:  "/sys/fs/cgroup",
 				},
 			},
 			ActionExecutor: &FileAppendActionExecutor{},
@@ -131,7 +132,7 @@ func (f *FileAppendActionExecutor) Exec(uid string, ctx context.Context, model *
 	}
 
 	if !exec.CheckFilepathExists(ctx, f.channel, filepath) {
-		log.Errorf(ctx,"`%s`: file does not exist", filepath)
+		log.Errorf(ctx, "`%s`: file-append-Exec-file does not exist", filepath)
 		return spec.ResponseFailWithFlags(spec.ParameterInvalid, "filepath", filepath, "the file does not exist")
 	}
 
@@ -147,7 +148,7 @@ func (f *FileAppendActionExecutor) Exec(uid string, ctx context.Context, model *
 		var err error
 		count, err = strconv.Atoi(countStr)
 		if err != nil || count < 1 {
-			log.Errorf(ctx,"`%s` value must be a positive integer", "count")
+			log.Errorf(ctx, "`%s` file-append-Exec-value must be a positive integer", "count")
 			return spec.ResponseFailWithFlags(spec.ParameterIllegal, "count", count, "it must be a positive integer")
 		}
 	}
@@ -155,7 +156,7 @@ func (f *FileAppendActionExecutor) Exec(uid string, ctx context.Context, model *
 		var err error
 		interval, err = strconv.Atoi(intervalStr)
 		if err != nil || interval < 1 {
-			log.Errorf(ctx, "`%s` value must be a positive integer", "interval")
+			log.Errorf(ctx, "`%s` file-append-Exec-value must be a positive integer", "interval")
 			return spec.ResponseFailWithFlags(spec.ParameterIllegal, "interval", interval, "it must be a positive integer")
 		}
 	}
@@ -187,7 +188,7 @@ func (f *FileAppendActionExecutor) start(filepath string, content string, count 
 }
 
 func (f *FileAppendActionExecutor) stop(filepath string, ctx context.Context) *spec.Response {
-	ctx = context.WithValue(ctx,"bin", AppendFileBin)
+	ctx = context.WithValue(ctx, "bin", AppendFileBin)
 	return exec.Destroy(ctx, f.channel, "file append")
 }
 
@@ -228,9 +229,48 @@ func parseDate(content string) string {
 			content = strings.Replace(content, text[0], strings.Replace(text[0], "\\", "", 1), 1)
 			continue
 		}
-		content = strings.Replace(content, text[0], "$(date \""+text[1]+"\")", 1)
+		// Parse the time format and generate actual timestamp
+		timeFormat := text[1]
+		currentTime := time.Now()
+		formattedTime := currentTime.Format(convertDateFormat(timeFormat))
+		content = strings.Replace(content, text[0], formattedTime, 1)
 	}
 	return content
+}
+
+// convertDateFormat converts date command format to Go time format
+func convertDateFormat(dateFormat string) string {
+	// Convert common date command format specifiers to Go time format
+	goFormat := dateFormat
+	// Year
+	goFormat = strings.ReplaceAll(goFormat, "%Y", "2006")
+	goFormat = strings.ReplaceAll(goFormat, "%y", "06")
+	// Month
+	goFormat = strings.ReplaceAll(goFormat, "%m", "01")
+	goFormat = strings.ReplaceAll(goFormat, "%B", "January")
+	goFormat = strings.ReplaceAll(goFormat, "%b", "Jan")
+	// Day
+	goFormat = strings.ReplaceAll(goFormat, "%d", "02")
+	goFormat = strings.ReplaceAll(goFormat, "%e", "2")
+	// Hour
+	goFormat = strings.ReplaceAll(goFormat, "%H", "15")
+	goFormat = strings.ReplaceAll(goFormat, "%I", "03")
+	goFormat = strings.ReplaceAll(goFormat, "%k", "15")
+	goFormat = strings.ReplaceAll(goFormat, "%l", "3")
+	// Minute
+	goFormat = strings.ReplaceAll(goFormat, "%M", "04")
+	// Second
+	goFormat = strings.ReplaceAll(goFormat, "%S", "05")
+	// AM/PM
+	goFormat = strings.ReplaceAll(goFormat, "%p", "PM")
+	// Time zone
+	goFormat = strings.ReplaceAll(goFormat, "%Z", "MST")
+	goFormat = strings.ReplaceAll(goFormat, "%z", "-0700")
+	// Weekday
+	goFormat = strings.ReplaceAll(goFormat, "%A", "Monday")
+	goFormat = strings.ReplaceAll(goFormat, "%a", "Mon")
+
+	return goFormat
 }
 
 func parseRandom(content string) *spec.Response {
